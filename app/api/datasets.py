@@ -6,6 +6,11 @@ from uuid import uuid4
 
 from ml.preprocessing import prepare_data
 
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
+from app.db.models import Dataset
+from app.db.session import get_db
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
@@ -16,7 +21,8 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 @router.post("/")
 async def upload_dataset(
     file: UploadFile = File(...),
-    target_column: str = Form(...)
+    target_column: str = Form(...),
+    db: Session = Depends(get_db)
 ):
     if not file.filename.endswith(".csv"):
         raise HTTPException(
@@ -42,13 +48,23 @@ async def upload_dataset(
 
     dataset_id = str(uuid4())
     file_path = UPLOAD_DIR / f"{dataset_id}.csv"
-
     file_path.write_bytes(content)
 
+    dataset = Dataset(
+        original_filename=file.filename,
+        storage_path=str(file_path),
+        row_count=len(df),
+        column_count=len(df.columns),
+    )
+
+    db.add(dataset)
+    db.commit()
+    db.refresh(dataset)
+
     return {
-        "dataset_id": dataset_id,
-        "filename": file.filename,
+        "dataset_id": dataset.id,
+        "filename": dataset.original_filename,
+        "rows": dataset.row_count,
+        "columns": dataset.column_count,
         "target_column": target_column,
-        "rows": len(df),
-        "columns": len(df.columns),
     }
