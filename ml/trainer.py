@@ -7,16 +7,18 @@ from ml.dataset import TabularDataset
 
 def train_model(
     model: nn.Module,
-    prepared_data: dict,
-    task_type: str,
-    epochs: int = 50,
+    numeric_data,
+    categorical_data,
+    target,
+    epochs: int = 100,
     batch_size: int = 32,
     learning_rate: float = 0.001,
+    weight_decay: float = 0.0,
 ):
     dataset = TabularDataset(
-        numeric_data=prepared_data["numeric_data"],
-        categorical_data=prepared_data["categorical_data"],
-        target=prepared_data["target"],
+        numeric_data=numeric_data,
+        categorical_data=categorical_data,
+        target=target,
     )
 
     loader = DataLoader(
@@ -25,29 +27,23 @@ def train_model(
         shuffle=True,
     )
 
-    if task_type == "regression":
-        loss_function = nn.MSELoss()
-
-    elif task_type == "binary_classification":
-        loss_function = nn.BCEWithLogitsLoss()
-
-    else:
-        raise ValueError(f"Unsupported task type: {task_type}")
+    loss_function = nn.MSELoss()
 
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=learning_rate,
+        weight_decay=weight_decay,
     )
 
-    model.train()
-
     for epoch in range(epochs):
+        model.train()
+
         total_loss = 0.0
 
         for batch in loader:
             numeric = batch["numeric"]
             categorical = batch["categorical"]
-            target = batch["target"]
+            target_batch = batch["target"]
 
             optimizer.zero_grad()
 
@@ -58,7 +54,7 @@ def train_model(
 
             loss = loss_function(
                 predictions,
-                target,
+                target_batch,
             )
 
             loss.backward()

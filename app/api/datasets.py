@@ -4,8 +4,6 @@ from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
-from ml.preprocessing import prepare_data
-
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
@@ -33,7 +31,7 @@ async def upload_dataset(
     content = await file.read()
 
     try:
-        df = pd.read_csv(BytesIO(content))
+        df = pd.read_csv(BytesIO(content), sep=r"\s+")#df = pd.read_csv(BytesIO(content))
     except Exception:
         raise HTTPException(
             status_code=400,

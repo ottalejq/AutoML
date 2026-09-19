@@ -22,7 +22,7 @@ class TabularDataset(Dataset):
         self.target = torch.tensor(
             target,
             dtype=torch.float32,
-        )
+        ).reshape(-1, 1)
 
     def __len__(self):
         return len(self.target)

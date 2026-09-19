@@ -1,42 +1,44 @@
 import pandas as pd
 
-from app.db.models import Dataset
-from ml.preprocessing import prepare_data
-from ml.models import build_model
-from ml.trainer import train_model
-from ml.evaluator import evaluate_model
+from ml.search import hyperparameter_search
+from ml.final_training import train_final_model
 
+from app.services.model_service import save_model_artifacts
 
-def run_training(
-    dataset: Dataset,
-    target_column: str,
-):
-    df = pd.read_csv(dataset.storage_path)
+def run_training(dataset, target_column):
+    df = pd.read_csv(
+        dataset.storage_path,
+        sep=r"\s+",
+    )
 
-    if target_column not in df.columns:
-        raise ValueError(
-            f"Target column '{target_column}' does not exist"
-        )
-
-    prepared_data = prepare_data(
+    results = hyperparameter_search(
         df=df,
         target_column=target_column,
+        n_trials=10,
+        n_splits=5,
     )
 
-    model = build_model(prepared_data)
+    best_trial = results["best_trial"]
 
-    trained_model = train_model(
+    model, preprocessor = train_final_model(
+        df=df,
+        target_column=target_column,
+        model_config=best_trial["model_config"],
+        training_config=best_trial["training_config"],
+    )
+
+    artifacts = save_model_artifacts(
         model=model,
-        prepared_data=prepared_data,
-    )
-
-    metrics = evaluate_model(
-        model=trained_model,
-        prepared_data=prepared_data,
+        preprocessor=preprocessor,
+        dataset_id=dataset.id,
+        model_config=best_trial["model_config"],
+        training_config=best_trial["training_config"],
+        target_column=target_column,
     )
 
     return {
         "dataset_id": dataset.id,
         "target_column": target_column,
-        "metrics": metrics,
+        "search_results": results,
+        "artifacts": artifacts,
     }

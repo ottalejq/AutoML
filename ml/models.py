@@ -9,24 +9,45 @@ class TabularModel(nn.Module):
         categorical_cardinalities: list[int],
         embedding_dims: list[int],
         hidden_dim: int = 64,
+        num_layers: int = 2,
+        dropout: float = 0.0,
     ):
         super().__init__()
 
         self.embeddings = nn.ModuleList([
             nn.Embedding(cardinality, embedding_dim)
-            for cardinality, embedding_dim
-            in zip(categorical_cardinalities, embedding_dims)
+            for cardinality, embedding_dim in zip(
+                categorical_cardinalities,
+                embedding_dims,
+            )
         ])
 
-        total_embedding_dim = sum(embedding_dims)
-
-        input_dim = num_numeric_features + total_embedding_dim
-
-        self.network = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, 1),
+        input_dim = (
+            num_numeric_features
+            + sum(embedding_dims)
         )
+
+        layers = []
+        current_dim = input_dim
+
+        for _ in range(num_layers):
+            layers.append(
+                nn.Linear(current_dim, hidden_dim)
+            )
+            layers.append(nn.ReLU())
+
+            if dropout > 0:
+                layers.append(
+                    nn.Dropout(dropout)
+                )
+
+            current_dim = hidden_dim
+
+        layers.append(
+            nn.Linear(current_dim, 1)
+        )
+
+        self.network = nn.Sequential(*layers)
 
     def forward(self, numeric, categorical):
         embedded = [
@@ -35,7 +56,10 @@ class TabularModel(nn.Module):
         ]
 
         if embedded:
-            x = torch.cat([numeric, *embedded], dim=1)
+            x = torch.cat(
+                [numeric, *embedded],
+                dim=1,
+            )
         else:
             x = numeric
 
