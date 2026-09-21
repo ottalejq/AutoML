@@ -51,12 +51,16 @@ def generate_all_configs():
     return all_configs
 
 
+
 def cross_validate(
     df,
     target_column,
     model_config,
     training_config,
     n_splits=5,
+    trial_number=None,
+    total_trials=None,
+    progress_callback=None,
 ):
     X = df.drop(columns=[target_column])
     y = df[target_column].to_numpy()
@@ -73,6 +77,14 @@ def cross_validate(
         kfold.split(X),
         start=1,
     ):
+        if progress_callback is not None:
+            progress_callback(
+                current_trial=trial_number,
+                total_trials=total_trials,
+                current_fold=fold_number,
+                total_folds=n_splits,
+            )
+            
         X_train = X.iloc[train_idx]
         X_val = X.iloc[val_idx]
 
@@ -139,23 +151,18 @@ def hyperparameter_search(
     target_column,
     n_trials=10,
     n_splits=5,
+    progress_callback=None,
 ):
-    all_configs = generate_all_configs()
-
-    random.shuffle(all_configs)
-
-    selected_configs = all_configs[:n_trials]
-
     trial_results = []
+
+    all_configs = generate_all_configs()
+    random.shuffle(all_configs)
+    selected_configs = all_configs[:n_trials]
 
     for trial_number, (
         model_config,
         training_config,
     ) in enumerate(selected_configs, start=1):
-
-        print(
-            f"Trial {trial_number}/{len(selected_configs)}"
-        )
 
         cv_results = cross_validate(
             df=df,
@@ -163,6 +170,9 @@ def hyperparameter_search(
             model_config=model_config,
             training_config=training_config,
             n_splits=n_splits,
+            trial_number=trial_number,
+            total_trials=n_trials,
+            progress_callback=progress_callback,
         )
 
         trial_results.append({

@@ -4,6 +4,10 @@ from pathlib import Path
 import joblib
 import torch
 
+from app.db.models import Model
+from ml.prediction import load_model_and_preprocessor, predict
+
+
 
 def save_model_artifacts(
     model,
@@ -52,37 +56,21 @@ def save_model_artifacts(
     }
 
 
-import json
-from pathlib import Path
-
-from ml.prediction import (
-    load_model_and_preprocessor,
-    predict,
-)
-
 
 def predict_with_model(
-    dataset_id: int,
+    model_id: int,
     rows: list[dict],
+    db,
 ):
-    model_dir = Path("storage/models")
+    model_record = db.get(Model, model_id)
 
-    model_path = model_dir / f"model_{dataset_id}.pt"
-    preprocessor_path = (
-        model_dir / f"preprocessor_{dataset_id}.joblib"
-    )
-    metadata_path = (
-        model_dir / f"metadata_{dataset_id}.json"
-    )
-
-    metadata = json.loads(
-        metadata_path.read_text()
-    )
+    if model_record is None:
+        raise ValueError("Model not found")
 
     model, preprocessor = load_model_and_preprocessor(
-        model_path=model_path,
-        preprocessor_path=preprocessor_path,
-        model_config=metadata["model_config"],
+        model_path=model_record.model_path,
+        preprocessor_path=model_record.preprocessor_path,
+        model_config=model_record.model_config,
     )
 
     return predict(

@@ -1,6 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
+from app.db.session import get_db
 from app.services.model_service import predict_with_model
 
 
@@ -14,16 +16,19 @@ class PredictionRequest(BaseModel):
     rows: list[dict]
 
 
-@router.post("/{dataset_id}/predict")
+@router.post("/{model_id}/predict")
 def predict_model(
-    dataset_id: int,
+    model_id: int,
     request: PredictionRequest,
+    db: Session = Depends(get_db),
 ):
     predictions = predict_with_model(
-        dataset_id=dataset_id,
+        model_id=model_id,
         rows=request.rows,
+        db=db,
     )
 
     return {
+        "model_id": model_id,
         "predictions": predictions,
     }
