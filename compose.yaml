@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: automl-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: automl
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+  redis:
+    image: redis:7-alpine
+    container_name: automl-redis
+
+  api:
+    build: .
+    container_name: automl-api
+    command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.docker
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      - postgres
+      - redis
+
+  worker:
+    build: .
+    container_name: automl-worker
+    command: celery -A worker.celery_app:celery_app worker --loglevel=info
+    env_file:
+      - .env.docker
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  postgres_data:
