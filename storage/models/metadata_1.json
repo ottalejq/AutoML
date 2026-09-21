@@ -1,0 +1,13 @@
+{
+  "dataset_id": 1,
+  "target_column": "MEDV",
+  "model_config": {
+    "hidden_dim": 128,
+    "num_layers": 3,
+    "dropout": 0.1
+  },
+  "training_config": {
+    "learning_rate": 0.0005,
+    "weight_decay": 0.0
+  }
+}
