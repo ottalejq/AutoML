@@ -1,17 +1,24 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+
+
 from pydantic import BaseModel
+from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.services.model_service import predict_with_model
+
+from app.db.models import Model as DBModel
 
 
 router = APIRouter(
     prefix="/models",
     tags=["models"],
 )
+
+
 
 
 class PredictionRequest(BaseModel):
@@ -33,4 +40,21 @@ def predict_model(
     return {
         "model_id": model_id,
         "predictions": predictions,
+    }
+
+
+
+@router.get("/{model_id}/info")
+def model_info(
+    model_id: UUID,
+    db: Session = Depends(get_db),
+):
+    model_record = db.get(DBModel, model_id)
+
+    if model_record is None:
+        raise HTTPException(status_code=404, detail="Model not found.")
+
+    return {
+        column.key: getattr(model_record, column.key)
+        for column in inspect(DBModel).column_attrs
     }
