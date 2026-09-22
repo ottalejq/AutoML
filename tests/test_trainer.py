@@ -1,7 +1,6 @@
 import numpy as np
 
-from ml.models import TabularModel
-from ml.trainer import train_model
+from ml.models import NeuralNetworkModel
 
 
 def test_train_model_runs():
@@ -22,24 +21,27 @@ def test_train_model_runs():
         dtype=np.float32,
     )
 
-    model = TabularModel(
-        num_numeric_features=1,
-        categorical_cardinalities=[],
-        embedding_dims=[],
+    model = NeuralNetworkModel(
+        num_numeric=1,
+        cat_cardinalities=[],
         hidden_dim=8,
-        num_layers=1,
-        dropout=0.0,
+        n_layers=1,
     )
 
-    result = train_model(
-        model=model,
-        numeric_data=numeric,
-        categorical_data=categorical,
-        target=target,
+    before = model.predict((numeric, categorical)).copy()
+
+    result = model.fit(
+        X_train=(numeric, categorical),
+        y_train=target,
         epochs=2,
         batch_size=2,
         learning_rate=0.001,
         weight_decay=0.0,
+        device="cpu",
     )
 
     assert result is model
+    predictions = model.predict((numeric, categorical))
+    assert predictions.shape == (4,)
+    assert np.isfinite(predictions).all()
+    assert not np.array_equal(predictions, before)

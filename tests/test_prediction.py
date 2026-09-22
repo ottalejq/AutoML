@@ -1,36 +1,24 @@
+import numpy as np
 import pandas as pd
 
-from ml.models import TabularModel
-from ml.preprocessing import TabularPreprocessor
-from ml.prediction import predict
+from ml.models import Model, NeuralNetworkModel
 
 
 def test_prediction_returns_one_value_per_row():
     df = pd.DataFrame({
-        "age": [20.0, 30.0, 40.0],
+        "age": [20.0, 30.0, 40.0, 50.0, 60.0],
     })
+    target = pd.Series([2.0, 3.0, 4.0, 5.0, 6.0])
 
-    preprocessor = TabularPreprocessor()
-    preprocessor.fit(df)
+    model = Model(NeuralNetworkModel, hidden_dim=8, n_layers=1)
+    model.fit(df, target, epochs=2, batch_size=2, device="cpu")
 
-    model = TabularModel(
-        num_numeric_features=1,
-        categorical_cardinalities=[],
-        embedding_dims=[],
-        hidden_dim=8,
-        num_layers=1,
-        dropout=0.0,
-    )
-
-    rows = [
+    rows = pd.DataFrame([
         {"age": 25.0},
         {"age": 35.0},
-    ]
+    ])
 
-    predictions = predict(
-        model=model,
-        preprocessor=preprocessor,
-        rows=rows,
-    )
+    predictions = model.predict(rows)
 
-    assert len(predictions) == 2
+    assert predictions.shape == (2,)
+    assert np.isfinite(predictions).all()

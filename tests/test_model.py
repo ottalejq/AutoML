@@ -1,16 +1,15 @@
 import torch
 
-from ml.models import TabularModel
+from ml.models import TabularNetwork
 
 
 def test_tabular_model_output_shape():
-    model = TabularModel(
-        num_numeric_features=2,
-        categorical_cardinalities=[5],
-        embedding_dims=[3],
+    model = TabularNetwork(
+        num_numeric=2,
+        cat_cardinalities=[5],
+        embedding_dim=3,
         hidden_dim=16,
-        num_layers=2,
-        dropout=0.1,
+        n_layers=2,
     )
 
     numeric = torch.tensor([
