@@ -45,10 +45,8 @@ def train_model(
     db.commit()
     db.refresh(job)
 
-    run_training_task.delay(
-        str(job.id)
-    )
-
+    run_training_task.delay(str(job.id))
+    
     return {
         "job_id": job.id,
         "dataset_id": job.dataset_id,
@@ -62,10 +60,7 @@ def get_training_job(
     job_id: UUID,
     db: Session = Depends(get_db),
 ):
-    job = db.get(
-        TrainingJob,
-        job_id,
-    )
+    job = db.get(TrainingJob, job_id)
 
     if job is None:
         raise HTTPException(

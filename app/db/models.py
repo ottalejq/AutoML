@@ -1,4 +1,4 @@
-import uuid
+from uuid import UUID, uuid4
 
 from datetime import datetime, timezone
 
@@ -11,10 +11,10 @@ from app.db.session import Base
 class Dataset(Base):
     __tablename__ = "datasets"
 
-    id: Mapped[uuid.UUID] = mapped_column(
+    id: Mapped[UUID] = mapped_column(
         Uuid,
         primary_key=True,
-        default=uuid.uuid4,
+        default=uuid4,
     )
 
     filename: Mapped[str] = mapped_column(
@@ -41,18 +41,18 @@ class Dataset(Base):
 class TrainingJob(Base):
     __tablename__ = "training_jobs"
 
-    id: Mapped[uuid.UUID] = mapped_column(
+    id: Mapped[UUID] = mapped_column(
         Uuid,
         primary_key=True,
-        default=uuid.uuid4,
+        default=uuid4,
     )
 
-    dataset_id: Mapped[uuid.UUID] = mapped_column(
+    dataset_id: Mapped[UUID] = mapped_column(
         ForeignKey("datasets.id"),
         nullable=False,
     )
 
-    model_id: Mapped[uuid.UUID | None] = mapped_column(
+    model_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("models.id"),
     )
 
@@ -75,17 +75,27 @@ class TrainingJob(Base):
         default=lambda: datetime.now(timezone.utc),
     )
 
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
 
 class Model(Base):
     __tablename__ = "models"
 
-    id: Mapped[uuid.UUID] = mapped_column(
+    id: Mapped[UUID] = mapped_column(
         Uuid,
         primary_key=True,
-        default=uuid.uuid4,
+        default=uuid4,
     )
 
-    dataset_id: Mapped[uuid.UUID] = mapped_column(
+    dataset_id: Mapped[UUID] = mapped_column(
         ForeignKey("datasets.id"),
         nullable=False,
     )

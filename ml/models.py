@@ -208,18 +208,15 @@ class NeuralNetworkModel(BaseModel):
         X_num_train, X_cat_train = X_train
 
         X_num_train = torch.as_tensor(
-            np.asarray(X_num_train),
-            dtype=torch.float32,
+            np.array(X_num_train, dtype=np.float32, copy=True),
         )
 
         X_cat_train = torch.as_tensor(
-            np.asarray(X_cat_train),
-            dtype=torch.long,
+            np.array(X_cat_train, dtype=np.int64, copy=True),
         )
 
         y_train = torch.as_tensor(
-            np.asarray(y_train),
-            dtype=torch.float32,
+            np.array(y_train, dtype=np.float32, copy=True),
         ).reshape(-1, 1)
 
         generator = torch.Generator()
@@ -253,22 +250,18 @@ class NeuralNetworkModel(BaseModel):
             X_num_val, X_cat_val = X_val
 
             X_num_val = torch.as_tensor(
-                np.asarray(X_num_val),
-                dtype=torch.float32,
-                device=device,
+                np.array(X_num_val, dtype=np.float32, copy=True),
             )
 
             X_cat_val = torch.as_tensor(
-                np.asarray(X_cat_val),
-                dtype=torch.long,
-                device=device,
+                np.array(X_cat_val, dtype=np.int64, copy=True),
             )
 
             y_val = torch.as_tensor(
-                np.asarray(y_val),
-                dtype=torch.float32,
-                device=device,
+                np.array(y_val, dtype=np.float32, copy=True),
             ).reshape(-1, 1)
+
+
 
         best_loss = float("inf")
         best_state = None
