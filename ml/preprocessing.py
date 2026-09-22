@@ -1,103 +1,156 @@
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
+
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+from ml.types import PreprocessingStrategy
 
 
 class TabularPreprocessor:
-    def __init__(self):
-        self.numeric_columns = []
-        self.categorical_columns = []
+    def __init__(self, strategy: PreprocessingStrategy):
+        self.strategy = strategy
 
-        self.scaler = StandardScaler()
-        self.medians = None
-        self.category_maps = {}
-
-    def fit(self, X: pd.DataFrame):
-        self.numeric_columns = (
-            X.select_dtypes(include="number")
+    def fit(self, X):
+        self.num_cols = (
+            X.select_dtypes(include=np.number)
             .columns
             .tolist()
         )
 
-        self.categorical_columns = (
-            X.select_dtypes(exclude="number")
-            .columns
+        self.cat_cols = (
+            X.columns
+            .difference(self.num_cols)
             .tolist()
         )
 
-        if self.numeric_columns:
-            numeric = X[self.numeric_columns].copy()
+        self.medians = X[self.num_cols].median()
 
-            self.medians = numeric.median()
+        if self.strategy in {
+            PreprocessingStrategy.ONE_HOT_SCALED,
+            PreprocessingStrategy.EMBEDDED_CATEGORICAL,
+        }:
+            self.scaler = StandardScaler().fit(
+                X[self.num_cols].fillna(self.medians)
+            )
 
-            numeric = numeric.fillna(self.medians)
-
-            self.scaler.fit(numeric)
-
-        for column in self.categorical_columns:
-            values = (
-                X[column]
+        if self.strategy == PreprocessingStrategy.ONE_HOT_SCALED:
+            self.encoder = OneHotEncoder(
+                handle_unknown="ignore",
+                sparse_output=False,
+            ).fit(
+                X[self.cat_cols]
                 .fillna("__MISSING__")
                 .astype(str)
             )
 
-            categories = sorted(values.unique())
-
-            self.category_maps[column] = {
-                category: index + 1
-                for index, category in enumerate(categories)
+        elif self.strategy == PreprocessingStrategy.NATIVE_CATEGORICAL:
+            self.categories = {
+                col: (
+                    X[col]
+                    .fillna("__MISSING__")
+                    .astype(str)
+                    .unique()
+                    .tolist()
+                )
+                for col in self.cat_cols
             }
+
+        elif self.strategy == PreprocessingStrategy.EMBEDDED_CATEGORICAL:
+            self.category_maps = {
+                col: {
+                    value: i + 1
+                    for i, value in enumerate(
+                        X[col]
+                        .fillna("__MISSING__")
+                        .astype(str)
+                        .unique()
+                    )
+                }
+                for col in self.cat_cols
+            }
+
+            self.cat_cardinalities = [
+                len(self.category_maps[col]) + 1
+                for col in self.cat_cols
+            ]
+
+            self.num_numeric = len(self.num_cols)
+
+        else:
+            raise ValueError(
+                f"Unsupported preprocessing strategy: {self.strategy}"
+            )
 
         return self
 
-    def transform(self, X: pd.DataFrame):
-        if self.numeric_columns:
-            numeric = (
-                X[self.numeric_columns]
-                .copy()
-                .fillna(self.medians)
+    def transform(self, X):
+        if self.strategy == PreprocessingStrategy.ONE_HOT_SCALED:
+            X_num = self.scaler.transform(
+                X[self.num_cols].fillna(self.medians)
             )
 
-            numeric_data = self.scaler.transform(numeric)
-
-        else:
-            numeric_data = np.empty(
-                (len(X), 0),
-                dtype=np.float32,
-            )
-
-        categorical_arrays = []
-
-        for column in self.categorical_columns:
-            values = (
-                X[column]
+            X_cat = self.encoder.transform(
+                X[self.cat_cols]
                 .fillna("__MISSING__")
                 .astype(str)
             )
 
-            mapping = self.category_maps[column]
+            return np.hstack([X_num, X_cat])
 
-            encoded = (
-                values
-                .map(mapping)
-                .fillna(0)
-                .astype(int)
-                .to_numpy()
+        if self.strategy == PreprocessingStrategy.NATIVE_CATEGORICAL:
+            X = X[self.num_cols + self.cat_cols].copy()
+
+            X[self.num_cols] = (
+                X[self.num_cols]
+                .fillna(self.medians)
             )
 
-            categorical_arrays.append(encoded)
+            for col in self.cat_cols:
+                X[col] = pd.Categorical(
+                    X[col]
+                    .fillna("__MISSING__")
+                    .astype(str),
+                    categories=self.categories[col],
+                )
 
-        if categorical_arrays:
-            categorical_data = np.column_stack(
-                categorical_arrays
-            )
-        else:
-            categorical_data = np.empty(
-                (len(X), 0),
-                dtype=np.int64,
+            return X
+
+        if self.strategy == PreprocessingStrategy.EMBEDDED_CATEGORICAL:
+            X_num = self.scaler.transform(
+                X[self.num_cols].fillna(self.medians)
+            ).astype(np.float32)
+
+            X_cat = (
+                np.column_stack([
+                    X[col]
+                    .fillna("__MISSING__")
+                    .astype(str)
+                    .map(self.category_maps[col])
+                    .fillna(0)
+                    .astype(np.int64)
+                    for col in self.cat_cols
+                ])
+                if self.cat_cols
+                else np.empty(
+                    (len(X), 0),
+                    dtype=np.int64,
+                )
             )
 
-        return {
-            "numeric": numeric_data.astype(np.float32),
-            "categorical": categorical_data.astype(np.int64),
-        }
+            return X_num, X_cat
+
+        raise ValueError(
+            f"Unsupported preprocessing strategy: {self.strategy}"
+        )
+
+    def get_model_params(self):
+        if self.strategy == PreprocessingStrategy.EMBEDDED_CATEGORICAL:
+            return {
+                "num_numeric": self.num_numeric,
+                "cat_cardinalities": self.cat_cardinalities,
+            }
+
+        return {}
+
+    def fit_transform(self, X):
+        return self.fit(X).transform(X)

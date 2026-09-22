@@ -1,194 +1,155 @@
 import numpy as np
-from sklearn.model_selection import KFold
-
-from ml.preprocessing import TabularPreprocessor
-from ml.models import TabularModel
-from ml.trainer import train_model
-from ml.evaluator import evaluate_model
-
 import random
 import itertools
 
-
-MODEL_SEARCH_SPACE = {
-    "hidden_dim": [32, 64, 128],
-    "num_layers": [1, 2, 3],
-    "dropout": [0.0, 0.1, 0.2],
-}
+from sklearn.model_selection import KFold
+from sklearn.metrics import root_mean_squared_error
 
 
-TRAINING_SEARCH_SPACE = {
-    "learning_rate": [1e-4, 5e-4, 1e-3],
-    "weight_decay": [0.0, 1e-5, 1e-4],
-}
+from ml.models import Model
 
 
-def generate_all_configs():
-    model_keys = list(MODEL_SEARCH_SPACE.keys())
-    model_values = list(MODEL_SEARCH_SPACE.values())
 
-    training_keys = list(TRAINING_SEARCH_SPACE.keys())
-    training_values = list(TRAINING_SEARCH_SPACE.values())
+def generate_all_configs(
+    model_search_space,
+    fit_search_space,
+):
+    model_keys = list(model_search_space.keys())
+    model_values = list(model_search_space.values())
 
-    all_configs = []
+    fit_keys = list(fit_search_space.keys())
+    fit_values = list(fit_search_space.values())
 
-    for model_combination in itertools.product(*model_values):
-        model_config = dict(
-            zip(model_keys, model_combination)
+    model_configs = [
+        dict(zip(model_keys, values))
+        for values in itertools.product(*model_values)
+    ]
+
+    fit_configs = [
+        dict(zip(fit_keys, values))
+        for values in itertools.product(*fit_values)
+    ]
+
+    return list(
+        itertools.product(
+            model_configs,
+            fit_configs,
         )
-
-        for training_combination in itertools.product(
-            *training_values
-        ):
-            training_config = dict(
-                zip(training_keys, training_combination)
-            )
-
-            all_configs.append(
-                (model_config, training_config)
-            )
-
-    return all_configs
+    )
 
 
 
 def cross_validate(
-    df,
-    target_column,
-    model_config,
-    training_config,
-    n_splits=5,
-    trial_number=None,
-    total_trials=None,
-    progress_callback=None,
+    X,
+    y,
+    model_class,
+    model_params,
+    fit_params,
+    metric,
+    n_folds,
+    val_size,
+    seed,
 ):
-    X = df.drop(columns=[target_column])
-    y = df[target_column].to_numpy()
-
     kfold = KFold(
-        n_splits=n_splits,
+        n_splits=n_folds,
         shuffle=True,
-        random_state=42,
+        random_state=seed,
     )
 
     fold_scores = []
 
-    for fold_number, (train_idx, val_idx) in enumerate(
-        kfold.split(X),
-        start=1,
-    ):
-        if progress_callback is not None:
-            progress_callback(
-                current_trial=trial_number,
-                total_trials=total_trials,
-                current_fold=fold_number,
-                total_folds=n_splits,
-            )
-            
+    for train_idx, test_idx in kfold.split(X):
         X_train = X.iloc[train_idx]
-        X_val = X.iloc[val_idx]
+        y_train = y.iloc[train_idx]
 
-        y_train = y[train_idx]
-        y_val = y[val_idx]
+        X_test = X.iloc[test_idx]
+        y_test = y.iloc[test_idx]
 
-        preprocessor = TabularPreprocessor()
-        preprocessor.fit(X_train)
-
-        train_data = preprocessor.transform(X_train)
-        val_data = preprocessor.transform(X_val)
-
-        cardinalities = [
-            len(preprocessor.category_maps[column]) + 1
-            for column in preprocessor.categorical_columns
-        ]
-
-        embedding_dims = [
-            min(16, max(2, cardinality // 2))
-            for cardinality in cardinalities
-        ]
-
-        model = TabularModel(
-            num_numeric_features=len(
-                preprocessor.numeric_columns
-            ),
-            categorical_cardinalities=cardinalities,
-            embedding_dims=embedding_dims,
-            **model_config,
+        model = Model(
+            model_class,
+            **model_params,
         )
 
-        model = train_model(
-            model=model,
-            numeric_data=train_data["numeric"],
-            categorical_data=train_data["categorical"],
-            target=y_train,
-            **training_config,
+        model.fit(
+            X_train,
+            y_train,
+            val_size=val_size,
+            seed=seed,
+            **fit_params,
         )
 
-        metrics = evaluate_model(
-            model=model,
-            numeric_data=val_data["numeric"],
-            categorical_data=val_data["categorical"],
-            target=y_val,
-        )
+        y_pred = model.predict(X_test)
 
-        fold_scores.append(metrics["rmse"])
+        score = metric(y_test, y_pred)
 
-        print(
-            f"Fold {fold_number}: "
-            f"RMSE = {metrics['rmse']:.4f}"
-        )
+        fold_scores.append(score)
 
-    return {
-        "fold_rmse": fold_scores,
-        "mean_rmse": float(np.mean(fold_scores)),
-        "std_rmse": float(np.std(fold_scores)),
-    }
+    return np.mean(fold_scores)
 
 
 
 def hyperparameter_search(
-    df,
-    target_column,
-    n_trials=10,
-    n_splits=5,
-    progress_callback=None,
+    X,
+    y,
+    model_class,
+    model_search_space,
+    fit_search_space,
+    model_fixed_params=None,
+    fit_fixed_params=None,
+    metric=root_mean_squared_error,
+    n_folds=5,
+    val_size=0.2,
+    seed=42,
+    n_trials=25,
 ):
-    trial_results = []
+    model_fixed_params = model_fixed_params or {}
+    fit_fixed_params = fit_fixed_params or {}
 
-    all_configs = generate_all_configs()
-    random.shuffle(all_configs)
-    selected_configs = all_configs[:n_trials]
-
-    for trial_number, (
-        model_config,
-        training_config,
-    ) in enumerate(selected_configs, start=1):
-
-        cv_results = cross_validate(
-            df=df,
-            target_column=target_column,
-            model_config=model_config,
-            training_config=training_config,
-            n_splits=n_splits,
-            trial_number=trial_number,
-            total_trials=n_trials,
-            progress_callback=progress_callback,
-        )
-
-        trial_results.append({
-            "model_config": model_config,
-            "training_config": training_config,
-            "mean_rmse": cv_results["mean_rmse"],
-            "std_rmse": cv_results["std_rmse"],
-            "fold_rmse": cv_results["fold_rmse"],
-        })
-
-    best_trial = min(
-        trial_results,
-        key=lambda trial: trial["mean_rmse"],
+    configs = generate_all_configs(
+        model_search_space,
+        fit_search_space,
     )
 
+    rng = random.Random(seed)
+    rng.shuffle(configs)
+
+    configs = configs[:min(n_trials, len(configs))]
+
+    best_score = float("inf")
+    best_model_params = None
+    best_fit_params = None
+
+    for model_params, fit_params in configs:
+        model_params = {
+            **model_fixed_params,
+            **model_params,
+            "seed": seed,
+        }
+
+        fit_params = {
+            **fit_fixed_params,
+            **fit_params,
+        }
+
+        score = cross_validate(
+            X=X,
+            y=y,
+            model_class=model_class,
+            model_params=model_params,
+            fit_params=fit_params,
+            metric=metric,
+            n_folds=n_folds,
+            val_size=val_size,
+            seed=seed,
+        )
+
+        if score < best_score:
+            best_score = score
+            best_model_params = model_params
+            best_fit_params = fit_params
+
     return {
-        "best_trial": best_trial,
-        "all_trials": trial_results,
+        "score": best_score,
+        "model_params": best_model_params,
+        "fit_params": best_fit_params,
     }

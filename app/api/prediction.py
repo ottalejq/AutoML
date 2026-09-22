@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -18,7 +20,7 @@ class PredictionRequest(BaseModel):
 
 @router.post("/{model_id}/predict")
 def predict_model(
-    model_id: int,
+    model_id: UUID,
     request: PredictionRequest,
     db: Session = Depends(get_db),
 ):

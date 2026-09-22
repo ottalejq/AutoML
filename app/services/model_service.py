@@ -1,80 +1,56 @@
-import json
+import pandas as pd
 from pathlib import Path
+from uuid import UUID
 
-import joblib
-import torch
-
-from app.db.models import Model
-from ml.prediction import load_model_and_preprocessor, predict
+from app.db.models import Model as DBModel
+from ml.models import Model
 
 
+MODEL_DIR = Path("storage/models")
+MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-def save_model_artifacts(
-    model,
-    preprocessor,
-    dataset_id,
-    model_config,
-    training_config,
-    target_column,
-):
-    model_dir = Path("storage/models")
-    model_dir.mkdir(parents=True, exist_ok=True)
 
-    model_path = model_dir / f"model_{dataset_id}.pt"
-    preprocessor_path = (
-        model_dir / f"preprocessor_{dataset_id}.joblib"
-    )
-    metadata_path = (
-        model_dir / f"metadata_{dataset_id}.json"
-    )
+def save_model_artifact(
+    model: Model,
+    model_id: UUID,
+) -> str:
+    path = MODEL_DIR / f"{model_id}.joblib"
 
-    torch.save(
-        model.state_dict(),
-        model_path,
-    )
+    model.save(path)
 
-    joblib.dump(
-        preprocessor,
-        preprocessor_path,
-    )
-
-    metadata = {
-        "dataset_id": dataset_id,
-        "target_column": target_column,
-        "model_config": model_config,
-        "training_config": training_config,
-    }
-
-    metadata_path.write_text(
-        json.dumps(metadata, indent=2)
-    )
-
-    return {
-        "model_path": str(model_path),
-        "preprocessor_path": str(preprocessor_path),
-        "metadata_path": str(metadata_path),
-    }
+    return str(path)
 
 
 
 def predict_with_model(
-    model_id: int,
+    model_id: UUID,
     rows: list[dict],
     db,
 ):
-    model_record = db.get(Model, model_id)
+    model_record = db.get(
+        DBModel,
+        model_id,
+    )
 
     if model_record is None:
-        raise ValueError("Model not found")
+        raise ValueError("Model not found.")
 
-    model, preprocessor = load_model_and_preprocessor(
-        model_path=model_record.model_path,
-        preprocessor_path=model_record.preprocessor_path,
-        model_config=model_record.model_config,
+    model = Model.load(
+        Path(model_record.path)
     )
 
-    return predict(
-        model=model,
-        preprocessor=preprocessor,
-        rows=rows,
+    X = pd.DataFrame(rows)
+
+    expected_columns = (
+        model.preprocessor.num_cols
+        + model.preprocessor.cat_cols
     )
+
+    missing = set(expected_columns) - set(X.columns)
+
+    if missing:
+        raise ValueError(
+            f"Missing columns: {sorted(missing)}"
+        )
+
+    return model.predict(X).tolist()
