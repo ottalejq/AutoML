@@ -10,7 +10,6 @@ from ml.models import (
     NeuralNetworkModel,
 )
 
-
 METRICS = {
     "rmse": {
         "fn": root_mean_squared_error,

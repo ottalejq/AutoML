@@ -1,13 +1,11 @@
-import numpy as np
-import random
 import itertools
+import random
 
-from sklearn.model_selection import KFold
+import numpy as np
 from sklearn.metrics import root_mean_squared_error
-
+from sklearn.model_selection import KFold
 
 from ml.models import Model
-
 
 
 def generate_all_configs(

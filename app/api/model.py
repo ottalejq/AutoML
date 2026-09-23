@@ -1,17 +1,14 @@
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-
-
 from pydantic import BaseModel
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
+from app.db.models import Model as DBModel
 from app.db.session import get_db
 from app.services.model_service import predict_with_model
-
-from app.db.models import Model as DBModel
-
 
 router = APIRouter(
     prefix="/models",
@@ -29,7 +26,7 @@ class PredictionRequest(BaseModel):
 def predict_model(
     model_id: UUID,
     request: PredictionRequest,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ):
     try:
         predictions = predict_with_model(
@@ -61,7 +58,7 @@ def predict_model(
 @router.get("/{model_id}/info")
 def model_info(
     model_id: UUID,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ):
     model_record = db.get(DBModel, model_id)
 

@@ -1,11 +1,10 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from worker.celery_app import celery_app
-
 from app.db.models import TrainingJob
 from app.db.session import SessionLocal
 from app.services.training_service import run_training
+from worker.celery_app import celery_app
 
 
 @celery_app.task

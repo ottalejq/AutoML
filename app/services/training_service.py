@@ -1,12 +1,12 @@
-from app.services.dataset_service import get_dataset
-from app.services.model_service import save_model_artifact
-from app.db.models import Model as ModelRecord
-from ml.pipeline import train_pipeline
-from ml.config import SEARCH_CONFIG
-
 from uuid import UUID
 
 import pandas as pd
+
+from app.db.models import Model as ModelRecord
+from app.services.dataset_service import get_dataset
+from app.services.model_service import save_model_artifact
+from ml.config import SEARCH_CONFIG
+from ml.pipeline import train_pipeline
 
 
 def run_training(

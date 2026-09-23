@@ -1,10 +1,10 @@
-import pandas as pd
 from pathlib import Path
 from uuid import UUID
 
+import pandas as pd
+
 from app.db.models import Model as DBModel
 from ml.models import Model
-
 
 MODEL_DIR = Path("storage/models")
 MODEL_DIR.mkdir(parents=True, exist_ok=True)

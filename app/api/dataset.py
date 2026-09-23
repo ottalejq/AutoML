@@ -1,5 +1,6 @@
 from io import BytesIO
 from pathlib import Path
+from typing import Annotated
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -7,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Dataset
 from app.db.session import get_db
-
 
 router = APIRouter(
     prefix="/datasets",
@@ -20,9 +20,9 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 @router.post("/")
 async def upload_dataset(
-    file: UploadFile = File(...),
-    target_column: str = Form(...),
-    db: Session = Depends(get_db),
+    file: Annotated[UploadFile, File()],
+    target_column: Annotated[str, Form()],
+    db: Annotated[Session, Depends(get_db)],
 ):
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(
@@ -34,11 +34,11 @@ async def upload_dataset(
 
     try:
         df = pd.read_csv(BytesIO(content))
-    except Exception:
+    except (ValueError, UnicodeError, pd.errors.ParserError) as exc:
         raise HTTPException(
             status_code=400,
             detail="Invalid CSV file.",
-        )
+        ) from exc
 
     if target_column not in df.columns:
         raise HTTPException(

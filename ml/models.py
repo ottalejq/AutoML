@@ -1,18 +1,15 @@
 import joblib
 import numpy as np
 import torch
-
 from lightgbm import LGBMRegressor
 from sklearn.linear_model import ElasticNet
+from sklearn.model_selection import train_test_split
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
-
-from sklearn.model_selection import train_test_split
 
 from ml.base import BaseModel
 from ml.preprocessing import TabularPreprocessor
 from ml.types import PreprocessingStrategy
-
 
 
 class ElasticNetModel(BaseModel):

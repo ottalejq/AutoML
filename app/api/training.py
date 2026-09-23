@@ -1,3 +1,4 @@
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,7 +8,6 @@ from sqlalchemy.orm import Session
 from app.db.models import Dataset, TrainingJob
 from app.db.session import get_db
 from worker.tasks import run_training_task
-
 
 router = APIRouter(
     prefix="/training",
@@ -22,7 +22,7 @@ class TrainingRequest(BaseModel):
 @router.post("/")
 def train_model(
     request: TrainingRequest,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ):
     dataset = db.get(
         Dataset,
@@ -58,7 +58,7 @@ def train_model(
 @router.get("/{job_id}")
 def get_training_job(
     job_id: UUID,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ):
     job = db.get(TrainingJob, job_id)
 

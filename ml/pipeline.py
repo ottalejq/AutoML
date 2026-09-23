@@ -1,17 +1,15 @@
 from sklearn.model_selection import train_test_split
 
 from ml.config import (
-    SEARCH_CONFIG,
-    MODEL_SEARCH_SPACES,
-    FIT_SEARCH_SPACES,
-    MODEL_FIXED_PARAMS,
     FIT_FIXED_PARAMS,
+    FIT_SEARCH_SPACES,
     METRICS,
+    MODEL_FIXED_PARAMS,
+    MODEL_SEARCH_SPACES,
+    SEARCH_CONFIG,
 )
 from ml.models import Model
 from ml.search import hyperparameter_search
-
-
 
 
 def train_pipeline(X, y):
@@ -79,7 +77,7 @@ def train_pipeline(X, y):
         elif direction == "maximize":
             better = result["score"] > best_result["score"]
         else:
-            raise Exception('Optimization direction not defined!')
+            raise ValueError(f'Unknown optimization direction: {direction!r}')
 
         if better:
             best_result = {

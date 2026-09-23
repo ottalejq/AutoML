@@ -2,7 +2,6 @@ from celery import Celery
 
 from app.core.config import settings
 
-
 celery_app = Celery(
     "automl",
     broker=settings.celery_broker_url,
