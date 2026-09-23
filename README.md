@@ -180,7 +180,7 @@ python -m pytest -v
 
 CI runs lint, formatting, migrations against PostgreSQL, and tests on Python 3.13 for pushes and pull requests.
 
-The test suite covers preprocessing, model fitting/prediction, configuration generation, artifact-save delegation, and API health. It currently also has stale references to removed `ml.dataset`, an outdated metric-registry test, and a training-to-prediction test that requires a missing `db_session` fixture. These need updating before the full suite can pass; it does not exercise a live queued Celery job.
+The test suite covers dataset lookup, metrics, preprocessing, model fitting/prediction, configuration generation, artifact saving, and API health. Training-to-prediction tests exercise all three model families with an isolated in-memory SQLite database and temporary artifacts. Tests do not require live PostgreSQL or Redis services and do not exercise a live queued Celery job.
 
 ## Project structure
 

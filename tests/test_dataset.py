@@ -1,33 +1,23 @@
-import numpy as np
-from ml.dataset import TabularDataset
+from uuid import uuid4
+
+import pytest
+
+from app.db.models import Dataset
+from app.services.dataset_service import get_dataset
 
 
-def test_tabular_dataset_returns_correct_shapes():
-    numeric = np.array(
-        [
-            [1.0, 2.0],
-            [3.0, 4.0],
-        ]
-    )
+def test_get_dataset_returns_saved_record(db_session):
+    dataset = Dataset(filename="data.csv", path="data.csv", target_column="target")
+    db_session.add(dataset)
+    db_session.commit()
 
-    categorical = np.array(
-        [
-            [1],
-            [2],
-        ]
-    )
+    result = get_dataset(db=db_session, dataset_id=dataset.id)
 
-    target = np.array([10.0, 20.0])
+    assert result.id == dataset.id
+    assert result.filename == "data.csv"
+    assert result.target_column == "target"
 
-    dataset = TabularDataset(
-        numeric_data=numeric,
-        categorical_data=categorical,
-        target=target,
-    )
 
-    sample = dataset[0]
-
-    assert len(dataset) == 2
-    assert sample["numeric"].shape == (2,)
-    assert sample["categorical"].shape == (1,)
-    assert sample["target"].shape == (1,)
+def test_get_dataset_rejects_unknown_id(db_session):
+    with pytest.raises(ValueError, match="Dataset not found"):
+        get_dataset(db=db_session, dataset_id=uuid4())
