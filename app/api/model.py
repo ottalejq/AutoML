@@ -31,12 +31,26 @@ def predict_model(
     request: PredictionRequest,
     db: Session = Depends(get_db),
 ):
-    predictions = predict_with_model(
-        model_id=model_id,
-        rows=request.rows,
-        db=db,
-    )
+    try:
+        predictions = predict_with_model(
+            model_id=model_id,
+            rows=request.rows,
+            db=db,
+        )
+    except ValueError as exc:
+        message = str(exc)
 
+        if message == "Model not found.":
+            raise HTTPException(
+                status_code=404,
+                detail=message,
+            ) from exc
+
+        raise HTTPException(
+            status_code=422,
+            detail=message,
+        ) from exc
+        
     return {
         "model_id": model_id,
         "predictions": predictions,

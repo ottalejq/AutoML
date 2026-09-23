@@ -12,9 +12,18 @@ from ml.models import (
 
 
 METRICS = {
-    "rmse": root_mean_squared_error,
-    "mae": mean_absolute_error,
-    "r2": r2_score,
+    "rmse": {
+        "fn": root_mean_squared_error,
+        "direction": "minimize",
+    },
+    "mae": {
+        "fn": mean_absolute_error,
+        "direction": "minimize",
+    },
+    "r2": {
+        "fn": r2_score,
+        "direction": "maximize",
+    },
 }
 
 

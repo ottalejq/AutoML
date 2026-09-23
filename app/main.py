@@ -2,15 +2,20 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.datasets import router as datasets_router
-from app.api.training import router as training_router
-from app.api.prediction import router as prediction_router
-from app.db.init_db import init_db
+from redis import Redis
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+from fastapi import Depends
 
+from app.core.config import settings
+from app.db.session import get_db
+
+from app.api.dataset import router as datasets_router
+from app.api.training import router as training_router
+from app.api.model import router as prediction_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
     yield
 
 
@@ -29,3 +34,13 @@ app.include_router(prediction_router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready(db: Session = Depends(get_db)):
+    db.execute(text("SELECT 1"))
+
+    redis = Redis.from_url(settings.celery_broker_url)
+    redis.ping()
+
+    return {"status": "ready"}

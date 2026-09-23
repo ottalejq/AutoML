@@ -1,77 +1,69 @@
-# AutoML
+﻿# AutoML
 
-A Python API for training regression models on CSV data and serving predictions. Upload a dataset, choose a numeric target column, and start a background training job. The training pipeline searches model configurations, evaluates the selected configuration on held-out data, and saves a model together with its fitted preprocessor.
+A Python API for training regression models on CSV data and serving predictions. Upload a dataset, choose a numeric target, and start a background job that searches model configurations, evaluates the winner on held-out data, and saves it with its fitted preprocessor.
 
-Built with FastAPI, SQLAlchemy, Celery, Redis, scikit-learn, LightGBM, and PyTorch. The Docker Compose setup uses PostgreSQL for dataset, job, and model metadata.
+Built with FastAPI, SQLAlchemy, Celery, Redis, scikit-learn, LightGBM, and PyTorch. PostgreSQL stores dataset, job, and model metadata.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    Client[Client] --> API[FastAPI]
-    API -->|Enqueue training| Redis[Redis]
+    Client --> API[FastAPI]
+    API -->|Queue training| Redis
     Redis --> Worker[Celery worker]
-    Worker --> Training[Training service]
-    Training --> Pipeline[Search and training pipeline]
-    Pipeline --> Models[Models and preprocessing]
+    Worker --> Pipeline[Search and training]
     API --> DB[(PostgreSQL)]
     Worker --> DB
-    Training --> DB
-    API -->|Upload CSV / load model| Storage[Shared storage]
-    Training -->|Read CSV / save model| Storage
+    API -->|Upload CSV / predict| Storage[Shared storage]
+    Pipeline -->|Read CSV / save model| Storage
 ```
 
-Training runs in the worker. Prediction runs in the API process using the saved model. Both processes must access the same database and storage directory.
+Training runs in the worker; prediction runs in the API. Both need the same database and storage directory. CSVs are saved under `storage/datasets/<dataset-id>.csv`; model/preprocessor bundles use `storage/models/<model-id>.joblib`.
 
 ## Run with Docker
 
-Install Docker with Docker Compose, then run these commands from the repository root:
+From the repository root, with Docker Compose installed:
 
 ```sh
 docker compose up --build -d
+```
+
+Once PostgreSQL is ready, apply the database migrations:
+
+```sh
+docker compose exec api python -m alembic upgrade head
 docker compose logs -f api worker
 ```
 
-The Compose file starts the API, a Celery worker, PostgreSQL, and Redis. It reads the service connection settings from `.env.docker`.
+Compose starts the API, worker, PostgreSQL, and Redis using `.env.docker`. **The API does not create tables on startup; migrations are required before uploading data.** The initial migration creates the current UUID-based schema. Existing databases created outside Alembic need their schema and migration history reconciled before applying it.
 
-- API documentation: [localhost:8000/docs](http://localhost:8000/docs)
-- Alternative API documentation: [localhost:8000/redoc](http://localhost:8000/redoc)
-- Health endpoint: [localhost:8000/health](http://localhost:8000/health)
+- Interactive API docs: [localhost:8000/docs](http://localhost:8000/docs)
+- Liveness: [localhost:8000/health](http://localhost:8000/health)
+- Readiness: [localhost:8000/ready](http://localhost:8000/ready) checks database connectivity and the Redis broker, but not migrations or worker availability.
 
-The API creates missing database tables on startup. PostgreSQL data is stored in the `postgres_data` Docker volume; uploaded datasets and model artifacts are stored under the host's `storage/` directory.
+PostgreSQL data persists in the `postgres_data` volume; datasets and artifacts persist in the host's `storage/` directory. Compose publishes PostgreSQL on port **5433** and the API on **8000**; Redis is internal only. No service readiness checks are configured in Compose, so retry migrations if PostgreSQL is still starting.
 
-The services have no readiness health checks configured. If the API starts before PostgreSQL is ready, check the logs and restart it with `docker compose restart api`. The `/health` endpoint reports that the API is responding; it does not check the database, Redis, or worker.
-
-Application code is copied into the images. After changing Python code, run `docker compose up --build -d` again.
-
-**Existing databases:** startup uses `create_all`, which does not update existing tables. The Alembic revisions currently describe an older schema with integer IDs and different columns, while the current models use UUIDs. Reconcile the migrations with [app/db/models.py](app/db/models.py) before using them to upgrade an existing database. The startup path above is intended for a fresh database.
+Rebuild with `docker compose up --build -d` after changing Python code.
 
 ## API workflow
 
-You can perform all four steps through `/docs`. IDs returned by the API are UUID strings.
+All steps are available through `/docs`. Dataset, job, and model IDs are UUID strings.
 
 ### 1. Upload a dataset
 
-Call `POST /datasets/` with multipart form fields:
-
-| Field | Value |
-| --- | --- |
-| `file` | A CSV file with a header row and a `.csv` filename |
-| `target_column` | The name of the numeric column to predict |
-
-For example, if `housing.csv` contains `area`, `rooms`, `city`, and `price`:
+Call `POST /datasets/` with multipart fields `file` (a CSV with a header row and `.csv` filename) and `target_column`:
 
 ```sh
 curl -X POST http://localhost:8000/datasets/ -F "file=@housing.csv" -F "target_column=price"
 ```
 
-On Windows PowerShell, use `curl.exe` for this command. Keep the returned `id` as your dataset ID. The response also includes `filename` and `target_column`.
+Use `curl.exe` on Windows PowerShell. The response contains `id`, `filename`, and `target_column`; keep `id` for training.
 
-Use a numeric target without missing values and enough rows for the train/test split and cross-validation. Feature types are inferred by pandas. Numeric features can contain missing values, but should have observed values available for median imputation. Include at least one numeric feature for the scaled preprocessing strategies. Upload validation checks CSV parsing and the presence of the target column; it does not validate all training requirements.
+Use a numeric target without missing values and enough rows for splitting and cross-validation. Feature types are inferred by pandas. Include at least one numeric feature for scaled preprocessing, and observed values for median imputation. Upload validation checks CSV parsing and target-column presence, not all training requirements.
 
 ### 2. Start training
 
-Send this JSON body to `POST /training/`, replacing the placeholder with the dataset ID:
+Send to `POST /training/`:
 
 ```json
 {
@@ -79,26 +71,19 @@ Send this JSON body to `POST /training/`, replacing the placeholder with the dat
 }
 ```
 
-The response contains `job_id`, `dataset_id`, `target_column`, and an initial `status` of `queued`. Model selection and training settings are configured in Python rather than supplied in this request.
+The response contains `job_id`, `dataset_id`, `target_column`, and `status: "queued"`. Search settings are configured in Python, not in the request.
 
-### 3. Check the job
+### 3. Check the job and model
 
-Call `GET /training/{job_id}`. Status changes from `queued` to `running`, then to `completed` or `failed`.
+Call `GET /training/{job_id}`. Status changes from `queued` to `running`, then `completed` or `failed`. The response includes dataset and target details, timestamps, `model_id` after success, and `error_message` on failure. It does not expose per-trial progress.
 
-The response includes:
+Use `GET /models/{model_id}/info` to retrieve the model's class, model/fit parameters, metric, held-out `test_score`, dataset ID, target column, artifact path, and creation time.
 
-- `job_id`, `dataset_id`, and `target_column`
-- `status` and `model_id` (available after successful training)
-- `created_at`, `started_at`, and `completed_at`
-- `error_message` when training fails
-
-Timestamps that have not been set are `null`. The endpoint does not currently expose per-trial progress or evaluation scores. The selected model's test score is stored in the database.
-
-If a job remains queued, check the worker and Redis logs. If it fails, inspect `error_message` and the worker logs.
+If a job stays queued, check worker and Redis logs. For failed jobs, inspect `error_message` and worker logs.
 
 ### 4. Make predictions
 
-Send feature rows to `POST /models/{model_id}/predict` using the model ID from the completed job:
+Send feature rows to `POST /models/{model_id}/predict`:
 
 ```json
 {
@@ -109,142 +94,108 @@ Send feature rows to `POST /models/{model_id}/predict` using the model ID from t
 }
 ```
 
-Include the feature columns used during training; the target column is not required. The API loads the saved preprocessor and model and returns `model_id` plus a `predictions` array with one numeric value per row, in input order.
+Include the training feature columns; the target is not required. The response contains `model_id` and a `predictions` array with one value per row in input order.
 
-Unknown dataset or job IDs return HTTP 404 from the training endpoints. Prediction errors for unknown models or missing feature columns currently raise service exceptions without an HTTP error mapping.
+Unknown dataset/job IDs in training requests and unknown model IDs return HTTP 404. Missing prediction feature columns return HTTP 422.
 
-## How training works
+## Training and configuration
 
 The pipeline in [ml/pipeline.py](ml/pipeline.py):
 
-1. Reserves 20% of the dataset for testing.
-2. Builds the parameter combinations for each model family, shuffles them with a fixed seed, and evaluates up to 25 configurations per family.
-3. Scores each configuration using five-fold cross-validation on the remaining data.
-4. Selects the configuration with the lowest mean RMSE and evaluates a separately fitted model on the held-out test set.
-5. Fits a final model from the full input dataset and saves it with its preprocessor.
+1. Reserves 20% of the data for testing.
+2. Shuffles parameter combinations with a fixed seed and evaluates up to 25 configurations per model family using five-fold cross-validation.
+3. Selects the lowest mean RMSE and evaluates a separately fitted model on the test set.
+4. Fits the selected configuration again using the full input dataset and saves the model with its preprocessor.
 
-Each call to the `Model.fit` wrapper, including the final fit, reserves 20% of its input for validation. Preprocessing is fitted only on that call's training portion. For the neural network, validation controls early stopping and selection of the best weights. The reported test score belongs to the evaluation model, before the final fit.
+Every `Model.fit` call, including the final fit, reserves 20% of its input for validation. Preprocessing is fitted only on that call's training portion. Neural-network validation controls early stopping and best-weight selection. The reported test score belongs to the evaluation model, before the final fit.
 
 | Model | Implementation | Preprocessing |
 | --- | --- | --- |
-| Elastic net | scikit-learn `ElasticNet` | Standardized numeric features and one-hot categorical features |
-| Gradient boosting | LightGBM `LGBMRegressor` | Numeric features and pandas categorical columns |
-| Neural network | PyTorch MLP with categorical embeddings | Standardized numeric features and integer-encoded categories |
+| Elastic net | scikit-learn `ElasticNet` | Scaled numeric and one-hot categorical features |
+| Gradient boosting | LightGBM `LGBMRegressor` | Numeric and native categorical features |
+| Neural network | PyTorch MLP with categorical embeddings | Scaled numeric and integer-encoded categorical features |
 
-Numeric missing values are filled with training medians. Categorical missing values use `__MISSING__`. Unseen categories become all-zero one-hot encodings, missing native categories, or embedding index `0`, depending on the strategy.
+Numeric missing values use training medians; categorical missing values use `__MISSING__`. Unseen categories become all-zero one-hot encodings, missing native categories, or embedding index `0`, respectively.
 
-The neural network uses AdamW and MSE loss. The search configuration allows up to 500 epochs with early-stopping patience of 20. It uses CUDA when available, otherwise CPU; the supplied Compose file does not configure GPU access. The fitted network is moved to CPU for prediction and serialization.
-
-## Configuration
-
-Application settings are read from environment variables or a root `.env` file:
-
-| Variable | Purpose |
-| --- | --- |
-| `DATABASE_URL` | SQLAlchemy database connection URL |
-| `CELERY_BROKER_URL` | Redis connection used to queue training tasks |
-| `CELERY_RESULT_BACKEND` | Redis connection used for Celery task results |
-
-All three are required. `.env.docker` supplies them for Compose; `.env.example` is currently empty.
-
-Search settings live in [ml/config.py](ml/config.py):
+Edit [ml/config.py](ml/config.py) to change the search:
 
 | Setting | Default |
 | --- | --- |
-| Selection metric | `rmse` |
+| Metric | `rmse` |
 | Cross-validation folds | `5` |
-| Test fraction | `0.2` |
-| Validation fraction within each fit | `0.2` |
+| Test / per-fit validation fraction | `0.2` / `0.2` |
 | Trials per model family | `25` |
 | Random seed | `42` |
 
-`MODEL_SEARCH_SPACES` and `FIT_SEARCH_SPACES` define the candidate parameters. `MODEL_FIXED_PARAMS` and `FIT_FIXED_PARAMS` define parameters shared across trials. Reduce the trial count or neural-network epoch limit for shorter development runs.
+`MODEL_SEARCH_SPACES` and `FIT_SEARCH_SPACES` define candidates; `MODEL_FIXED_PARAMS` and `FIT_FIXED_PARAMS` define shared parameters. The neural network uses AdamW, MSE loss, up to 500 epochs, and early-stopping patience of 20. Reduce trials or epochs for shorter development runs. Compose does not configure GPU access; CPU is the default there.
 
-The metric registry contains RMSE, MAE, and R², but the search always minimizes the score. R² therefore requires a change to the selection logic before it can be used correctly. The training service currently records the metric name as `rmse` regardless of configuration.
+The metric registry includes RMSE, MAE, and R-squared. Selection between model families respects the metric direction, but search within each family still minimizes the score, so R-squared selection is not yet correct. The stored metric name follows `SEARCH_CONFIG`.
 
 ## Local development
 
-Use Python 3.13, matching the Docker image and CI. Create a virtual environment and install dependencies:
+Use Python 3.13, matching Docker and CI:
 
 ```sh
 python -m venv .venv
 ```
 
-Activate it with `.venv\Scripts\Activate.ps1` on PowerShell or `source .venv/bin/activate` on Linux/macOS, then run:
+Activate with `.venv\Scripts\Activate.ps1` on PowerShell or `source .venv/bin/activate` on Linux/macOS, then install dependencies:
 
 ```sh
 python -m pip install -r requirements.txt
 ```
 
-For an API and worker running on your host, create a `.env` file pointing at reachable PostgreSQL and Redis services, for example:
+Settings come from environment variables or a root `.env` file. All three are required (`.env.example` is currently empty):
 
 ```dotenv
-DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/automl
+DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5433/automl
 CELERY_BROKER_URL=redis://localhost:6379/0
 CELERY_RESULT_BACKEND=redis://localhost:6379/1
 ```
 
-The supplied Compose file does not publish PostgreSQL or Redis ports to the host. These localhost examples require separately available services or explicit port mappings.
+This database URL uses Compose's published PostgreSQL port. The Redis URLs require a separately available Redis service or an added Compose port mapping. The API and worker must use the same database and run from the repository root so their storage paths agree.
 
-Run the API and worker in separate terminals from the repository root:
+Apply migrations, then start the API:
 
 ```sh
+python -m alembic upgrade head
 python -m uvicorn app.main:app --reload
 ```
+
+Start the worker in a separate terminal:
 
 ```sh
 python -m celery -A worker.celery_app:celery_app worker --loglevel=info
 ```
 
-Use the Docker setup to run the worker in Linux when developing on Windows.
+Use the Docker worker when developing on Windows.
 
-### Tests
-
-With dependencies installed and the three environment variables configured:
+### Checks
 
 ```sh
+python -m ruff check .
+python -m ruff format --check .
 python -m pytest -v
 ```
 
-The current suite tests dataset shapes, model output, neural-network fitting and prediction, preprocessing strategies, metric calculations, configuration generation, artifact-save delegation, and the health endpoint. It does not run a complete queued training job or validate database migrations.
+CI runs lint, formatting, migrations against PostgreSQL, and tests on Python 3.13 for pushes and pull requests.
 
-The tests do not require live PostgreSQL or Redis services. For example, CI uses `DATABASE_URL=sqlite:///./test.db` alongside localhost Redis URLs. CI runs on Python 3.13 for pushes and pull requests.
+The test suite covers preprocessing, model fitting/prediction, configuration generation, artifact-save delegation, and API health. It currently also has stale references to removed `ml.dataset`, an outdated metric-registry test, and a training-to-prediction test that requires a missing `db_session` fixture. These need updating before the full suite can pass; it does not exercise a live queued Celery job.
 
 ## Project structure
 
-```text
-AutoML/
-├── app/
-│   ├── api/             # Dataset, training, and prediction routes
-│   ├── core/            # Environment-based settings
-│   ├── db/              # ORM models, sessions, and table creation
-│   ├── schemas/         # Reserved package; request schemas live in routes
-│   └── services/        # Dataset lookup, training, and artifact handling
-├── ml/
-│   ├── base.py          # Common model interface
-│   ├── config.py        # Search spaces, fixed parameters, and metrics
-│   ├── models.py        # Regressors and preprocessing/model wrapper
-│   ├── pipeline.py      # Model selection, evaluation, and final fit
-│   ├── preprocessing.py # Model-specific feature transformations
-│   ├── search.py        # Configuration generation and cross-validation
-│   ├── types.py         # Preprocessing strategy enum
-│   ├── dataset.py       # Standalone PyTorch dataset helper
-│   └── prediction.py    # Legacy prediction implementation
-├── worker/              # Celery application and training task
-├── tests/               # Unit and smoke tests
-├── alembic/             # Historical database migrations
-├── storage/
-│   ├── datasets/        # Uploaded CSV files, named by dataset UUID
-│   └── models/          # Model/preprocessor bundles, named by model UUID
-├── .github/workflows/   # CI configuration
-├── compose.yaml         # API, worker, PostgreSQL, and Redis services
-├── Dockerfile
-└── requirements.txt
-```
-
-The active prediction path is `app.services.model_service.predict_with_model` → `ml.models.Model.predict`. The legacy `ml/prediction.py` still references the removed `TabularModel` and is not used by the API. Neural-network training uses `TensorDataset` rather than the standalone helper in `ml/dataset.py`.
-
-Artifacts are saved as `storage/models/<model-id>.joblib`; each bundle contains the model wrapper and fitted preprocessor. Dataset and model storage directories are ignored by Git.
+| Path | Purpose |
+| --- | --- |
+| `app/api/` | Dataset, training, prediction, and model-info routes |
+| `app/services/` | Dataset lookup, training orchestration, and artifacts |
+| `app/core/`, `app/db/` | Settings, ORM models, and database sessions |
+| `ml/` | Models, preprocessing, search, metrics, and training pipeline |
+| `worker/` | Celery application and training task |
+| `alembic/` | Database migrations |
+| `tests/` | Unit and integration tests |
+| `storage/` | Uploaded datasets and saved models (ignored by Git) |
+| `compose.yaml`, `Dockerfile` | Container setup |
+| `.github/workflows/` | CI configuration |
 
 ## License
 

@@ -2,6 +2,7 @@ from app.services.dataset_service import get_dataset
 from app.services.model_service import save_model_artifact
 from app.db.models import Model as ModelRecord
 from ml.pipeline import train_pipeline
+from ml.config import SEARCH_CONFIG
 
 from uuid import UUID
 
@@ -34,7 +35,7 @@ def run_training(
         model_class=result["model_class"].__name__,
         model_params=result["model_params"],
         fit_params=result["fit_params"],
-        metric="rmse",
+        metric=SEARCH_CONFIG["metric"],
         test_score=result["test_score"],
     )
 
