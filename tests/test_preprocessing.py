@@ -8,10 +8,12 @@ from ml.types import PreprocessingStrategy
 
 @pytest.mark.parametrize("strategy", list(PreprocessingStrategy))
 def test_preprocessor_handles_numeric_and_categorical(strategy):
-    df = pd.DataFrame({
-        "age": [20, 30, 40],
-        "country": ["DE", "FR", "DE"],
-    })
+    df = pd.DataFrame(
+        {
+            "age": [20, 30, 40],
+            "country": ["DE", "FR", "DE"],
+        }
+    )
 
     preprocessor = TabularPreprocessor(strategy)
     preprocessor.fit(df)

@@ -46,7 +46,7 @@ def train_model(
     db.refresh(job)
 
     run_training_task.delay(str(job.id))
-    
+
     return {
         "job_id": job.id,
         "dataset_id": job.dataset_id,

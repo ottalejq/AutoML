@@ -19,13 +19,11 @@ def generate_all_configs(
     fit_values = list(fit_search_space.values())
 
     model_configs = [
-        dict(zip(model_keys, values))
-        for values in itertools.product(*model_values)
+        dict(zip(model_keys, values)) for values in itertools.product(*model_values)
     ]
 
     fit_configs = [
-        dict(zip(fit_keys, values))
-        for values in itertools.product(*fit_values)
+        dict(zip(fit_keys, values)) for values in itertools.product(*fit_values)
     ]
 
     return list(
@@ -34,7 +32,6 @@ def generate_all_configs(
             fit_configs,
         )
     )
-
 
 
 def cross_validate(
@@ -85,7 +82,6 @@ def cross_validate(
     return np.mean(fold_scores)
 
 
-
 def hyperparameter_search(
     X,
     y,
@@ -111,7 +107,7 @@ def hyperparameter_search(
     rng = random.Random(seed)
     rng.shuffle(configs)
 
-    configs = configs[:min(n_trials, len(configs))]
+    configs = configs[: min(n_trials, len(configs))]
 
     best_score = float("inf")
     best_model_params = None

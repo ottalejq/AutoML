@@ -29,24 +29,24 @@ def train_pipeline(X, y):
 
     best_result = None
 
-# def train_pipeline(X, y):
-#     seed = SEARCH_CONFIG["seed"]
-#     val_size = SEARCH_CONFIG["val_size"]
-#     metric = METRICS[SEARCH_CONFIG["metric"]]
+    # def train_pipeline(X, y):
+    #     seed = SEARCH_CONFIG["seed"]
+    #     val_size = SEARCH_CONFIG["val_size"]
+    #     metric = METRICS[SEARCH_CONFIG["metric"]]
 
-#     X_train, X_test, y_train, y_test = train_test_split(
-#         X,
-#         y,
-#         test_size=SEARCH_CONFIG["test_size"],
-#         random_state=seed,
-#     )
+    #     X_train, X_test, y_train, y_test = train_test_split(
+    #         X,
+    #         y,
+    #         test_size=SEARCH_CONFIG["test_size"],
+    #         random_state=seed,
+    #     )
 
-#     best_result = {
-#         "score": float("inf"),
-#         "model_class": None,
-#         "model_params": None,
-#         "fit_params": None,
-#     }
+    #     best_result = {
+    #         "score": float("inf"),
+    #         "model_class": None,
+    #         "model_params": None,
+    #         "fit_params": None,
+    #     }
 
     for model_class in MODEL_SEARCH_SPACES:
         result = hyperparameter_search(
@@ -77,7 +77,7 @@ def train_pipeline(X, y):
         elif direction == "maximize":
             better = result["score"] > best_result["score"]
         else:
-            raise ValueError(f'Unknown optimization direction: {direction!r}')
+            raise ValueError(f"Unknown optimization direction: {direction!r}")
 
         if better:
             best_result = {

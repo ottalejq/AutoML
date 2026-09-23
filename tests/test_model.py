@@ -12,15 +12,19 @@ def test_tabular_model_output_shape():
         n_layers=2,
     )
 
-    numeric = torch.tensor([
-        [1.0, 2.0],
-        [3.0, 4.0],
-    ])
+    numeric = torch.tensor(
+        [
+            [1.0, 2.0],
+            [3.0, 4.0],
+        ]
+    )
 
-    categorical = torch.tensor([
-        [1],
-        [2],
-    ])
+    categorical = torch.tensor(
+        [
+            [1],
+            [2],
+        ]
+    )
 
     output = model(
         numeric,

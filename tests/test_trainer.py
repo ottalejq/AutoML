@@ -4,12 +4,15 @@ from ml.models import NeuralNetworkModel
 
 
 def test_train_model_runs():
-    numeric = np.array([
-        [1.0],
-        [2.0],
-        [3.0],
-        [4.0],
-    ], dtype=np.float32)
+    numeric = np.array(
+        [
+            [1.0],
+            [2.0],
+            [3.0],
+            [4.0],
+        ],
+        dtype=np.float32,
+    )
 
     categorical = np.empty(
         (4, 0),

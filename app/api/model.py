@@ -16,8 +16,6 @@ router = APIRouter(
 )
 
 
-
-
 class PredictionRequest(BaseModel):
     rows: list[dict]
 
@@ -47,12 +45,11 @@ def predict_model(
             status_code=422,
             detail=message,
         ) from exc
-        
+
     return {
         "model_id": model_id,
         "predictions": predictions,
     }
-
 
 
 @router.get("/{model_id}/info")

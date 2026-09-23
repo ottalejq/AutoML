@@ -96,27 +96,28 @@ class TabularNetwork(nn.Module):
     ):
         super().__init__()
 
-        self.embeddings = nn.ModuleList([
-            nn.Embedding(
-                num_embeddings=cardinality,
-                embedding_dim=embedding_dim,
-            )
-            for cardinality in cat_cardinalities
-        ])
-
-        input_dim = (
-            num_numeric
-            + len(cat_cardinalities) * embedding_dim
+        self.embeddings = nn.ModuleList(
+            [
+                nn.Embedding(
+                    num_embeddings=cardinality,
+                    embedding_dim=embedding_dim,
+                )
+                for cardinality in cat_cardinalities
+            ]
         )
+
+        input_dim = num_numeric + len(cat_cardinalities) * embedding_dim
 
         layers = []
         in_dim = input_dim
 
         for _ in range(n_layers):
-            layers.extend([
-                nn.Linear(in_dim, hidden_dim),
-                nn.ReLU(),
-            ])
+            layers.extend(
+                [
+                    nn.Linear(in_dim, hidden_dim),
+                    nn.ReLU(),
+                ]
+            )
             in_dim = hidden_dim
 
         layers.append(nn.Linear(in_dim, 1))
@@ -127,13 +128,10 @@ class TabularNetwork(nn.Module):
         parts = [X_num]
 
         parts.extend(
-            embedding(X_cat[:, i])
-            for i, embedding in enumerate(self.embeddings)
+            embedding(X_cat[:, i]) for i, embedding in enumerate(self.embeddings)
         )
 
-        return self.mlp(
-            torch.cat(parts, dim=1)
-        )
+        return self.mlp(torch.cat(parts, dim=1))
 
 
 class NeuralNetworkModel(BaseModel):
@@ -238,10 +236,7 @@ class NeuralNetworkModel(BaseModel):
 
         loss_fn = nn.MSELoss()
 
-        use_validation = (
-            X_val is not None
-            and y_val is not None
-        )
+        use_validation = X_val is not None and y_val is not None
 
         if use_validation:
             X_num_val, X_cat_val = X_val
@@ -257,8 +252,6 @@ class NeuralNetworkModel(BaseModel):
             y_val = torch.as_tensor(
                 np.array(y_val, dtype=np.float32, copy=True),
             ).reshape(-1, 1)
-
-
 
         best_loss = float("inf")
         best_state = None
@@ -363,9 +356,7 @@ class Model:
         model_class,
         **model_params,
     ):
-        self.preprocessor = TabularPreprocessor(
-            model_class.preprocessing
-        )
+        self.preprocessor = TabularPreprocessor(model_class.preprocessing)
 
         self.model_class = model_class
         self.model_params = model_params

@@ -21,7 +21,6 @@ def save_model_artifact(
     return str(path)
 
 
-
 def predict_with_model(
     model_id: UUID,
     rows: list[dict],
@@ -35,22 +34,15 @@ def predict_with_model(
     if model_record is None:
         raise ValueError("Model not found.")
 
-    model = Model.load(
-        Path(model_record.path)
-    )
+    model = Model.load(Path(model_record.path))
 
     X = pd.DataFrame(rows)
 
-    expected_columns = (
-        model.preprocessor.num_cols
-        + model.preprocessor.cat_cols
-    )
+    expected_columns = model.preprocessor.num_cols + model.preprocessor.cat_cols
 
     missing = set(expected_columns) - set(X.columns)
 
     if missing:
-        raise ValueError(
-            f"Missing columns: {sorted(missing)}"
-        )
+        raise ValueError(f"Missing columns: {sorted(missing)}")
 
     return model.predict(X).tolist()

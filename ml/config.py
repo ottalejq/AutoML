@@ -52,7 +52,6 @@ MODEL_SEARCH_SPACES = {
             0.95,
         ],
     },
-
     GradientBoostingModel: {
         "n_estimators": [
             300,
@@ -92,7 +91,6 @@ MODEL_SEARCH_SPACES = {
             1.0,
         ],
     },
-
     NeuralNetworkModel: {
         "embedding_dim": [
             4,
@@ -116,9 +114,7 @@ MODEL_SEARCH_SPACES = {
 
 FIT_SEARCH_SPACES = {
     ElasticNetModel: {},
-
     GradientBoostingModel: {},
-
     NeuralNetworkModel: {
         "learning_rate": [
             3e-4,
@@ -144,20 +140,16 @@ MODEL_FIXED_PARAMS = {
     ElasticNetModel: {
         "max_iter": 10_000,
     },
-
     GradientBoostingModel: {
         "verbosity": -1,
     },
-
     NeuralNetworkModel: {},
 }
 
 
 FIT_FIXED_PARAMS = {
     ElasticNetModel: {},
-
     GradientBoostingModel: {},
-
     NeuralNetworkModel: {
         "epochs": 500,
         "patience": 20,
