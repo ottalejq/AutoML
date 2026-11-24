@@ -6,3 +6,6 @@ __pycache__
 .env
 .env.docker
 .pytest_cache
+.env.*
+storage/
+.ruff_cache/
